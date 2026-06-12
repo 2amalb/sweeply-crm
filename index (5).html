@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sweeply CRM — воронка</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="%23FF5430"/><stop offset="1" stop-color="%23FFA01E"/></linearGradient></defs><g fill="url(%23g)"><circle cx="50" cy="24" r="22"/><circle cx="74" cy="42" r="22"/><circle cx="65" cy="71" r="22"/><circle cx="35" cy="71" r="22"/><circle cx="26" cy="42" r="22"/><circle cx="50" cy="48" r="26"/></g><path d="M50 33 L66 46 L66 64 L34 64 L34 46 Z" fill="white"/></svg>'>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#221610; --muted:#8C7C70; --orange:#E8541F;
+    --border:#F0E4DA; --tint:#FCF9F6; --tint2:#F5F1ED;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:#FBF7F3; display:flex; flex-direction:column;}
+
+  .topbar{background:#fff; border-bottom:1px solid var(--border); padding:10px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .brand{display:flex; align-items:center; gap:9px;}
+  .brand h1{font-size:16px; line-height:1.15;}
+  .brand .sub{font-size:11px; color:var(--muted);}
+  .right{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .userbox{font-size:12px; color:var(--muted);}
+  .userbox b{color:var(--ink);}
+  .rolebadge{font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; margin-left:4px;}
+  .role-admin{color:#E8541F; background:#FFE9DD;}
+  .role-manager{color:#8C7C70; background:#F5F1ED;}
+
+  .btn{border:none; cursor:pointer; font:inherit; font-size:13.5px; font-weight:600; border-radius:11px; padding:8px 14px;}
+  .btn-primary{color:#fff; background:linear-gradient(135deg,#FF5430,#FFA01E);}
+  .btn-ghost{background:var(--tint2); color:var(--ink);}
+  .btn-sm{font-size:12px; padding:5px 9px; border-radius:8px;}
+  .btn:disabled{opacity:.4; cursor:default;}
+
+  .filters{background:#fff; border-bottom:1px solid var(--border); padding:8px 16px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .search{flex:1; min-width:200px; max-width:420px; padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--tint); font:inherit; font-size:13px; outline:none;}
+  .authorsel{padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--tint); font:inherit; font-size:12.5px; outline:none; color:var(--ink);}
+  .chip{border:1px solid var(--border); background:#fff; border-radius:999px; padding:5px 11px; font-size:12px; font-weight:600; cursor:pointer; color:var(--muted);}
+  .chip.active{color:#A3433A; background:#F8E7E5; border-color:#A3433A;}
+  .stat{font-size:12px; color:var(--muted); margin-left:auto;}
+
+  /* board */
+  .board{flex:1; overflow-x:auto; overflow-y:hidden; display:flex; gap:12px; padding:14px 16px 18px; align-items:stretch;}
+  .col{width:272px; min-width:272px; display:flex; flex-direction:column; background:#F4EDE7; border-radius:14px; max-height:100%;}
+  .col.dragover{outline:2px dashed var(--orange); outline-offset:-2px; background:#FFEFE4;}
+  .col-head{padding:10px 12px 8px; display:flex; align-items:center; gap:7px; flex-shrink:0;}
+  .col-dot{width:9px; height:9px; border-radius:50%;}
+  .col-title{font-size:12.5px; font-weight:700;}
+  .col-count{font-size:11.5px; color:var(--muted); margin-left:auto; background:#fff; border-radius:999px; padding:1px 8px;}
+  .col-body{flex:1; overflow-y:auto; padding:2px 8px 10px; display:flex; flex-direction:column; gap:8px;}
+  .col-body::-webkit-scrollbar{width:5px;}
+  .col-body::-webkit-scrollbar-thumb{background:#DCCFC4; border-radius:3px;}
+
+  .kcard{background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px 11px; cursor:grab; box-shadow:0 1px 2px rgba(120,90,60,.06);}
+  .kcard:active{cursor:grabbing;}
+  .kcard.overdue{border-color:#EFC4BE; background:#FFFAF9;}
+  .kcard.dragging{opacity:.45;}
+  .kc-top{display:flex; align-items:flex-start; gap:6px;}
+  .kc-name{font-weight:700; font-size:13.5px; line-height:1.25; flex:1; min-width:0; word-wrap:break-word;}
+  .kc-author{font-size:9.5px; font-weight:700; color:#7A6356; background:var(--tint2); padding:2px 7px; border-radius:999px; white-space:nowrap; flex-shrink:0;}
+  .kc-meta{font-size:11px; color:var(--muted); margin-top:5px; line-height:1.45; word-wrap:break-word;}
+  .kc-next{font-size:11px; margin-top:6px; font-weight:600; line-height:1.35;}
+  .kc-next .d{font-weight:400; color:var(--muted);}
+  .kc-next.over, .kc-next.over .d{color:#A3433A;}
+  .kc-next.today{color:var(--orange);}
+  .kc-notes{font-size:10.5px; color:var(--muted); margin-top:5px; white-space:pre-wrap; max-height:54px; overflow:hidden;}
+  .kc-foot{display:flex; align-items:center; gap:5px; margin-top:8px;}
+  .kc-cleaners{font-size:10.5px; color:var(--muted);}
+  .kc-btns{margin-left:auto; display:flex; gap:4px;}
+  .kc-btn{border:none; cursor:pointer; font-size:11px; font-weight:700; border-radius:7px; padding:3px 7px; background:var(--tint2); color:var(--ink);}
+  .kc-btn.adv{color:#E8541F; background:#FFE9DD;}
+  .kc-btn.del{color:#A3433A; background:#F8E7E5;}
+
+  /* modal */
+  .modal-bg{position:fixed; inset:0; background:rgba(34,22,16,.45); display:flex; align-items:flex-end; justify-content:center; z-index:50;}
+  @media(min-width:640px){ .modal-bg{align-items:center; padding:16px;} }
+  .modal{background:#fff; width:100%; max-width:520px; border-radius:20px 20px 0 0; padding:22px; max-height:92vh; overflow-y:auto;}
+  @media(min-width:640px){ .modal{border-radius:20px;} }
+  .modal h2{font-size:17px; margin-bottom:16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:4px;}
+  .field input,.field select,.field textarea{width:100%; padding:9px 12px; border-radius:12px; border:1px solid var(--border); background:var(--tint); font:inherit; font-size:14px; outline:none; color:var(--ink);}
+  .field textarea{min-height:70px; resize:vertical;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .modal .foot{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;}
+  .modal .foot .btn-primary{flex:1;}
+  .modal .danger{color:#A3433A; background:#F8E7E5;}
+
+  /* login */
+  .login{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .login-card{width:100%; max-width:360px;}
+  .login-card .logo{display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:24px;}
+  .login-card h1{font-size:20px;}
+  .err{color:#A3433A; font-size:12.5px; margin-top:10px; min-height:16px;}
+
+  #loading{position:fixed; inset:0; background:#FBF7F3; display:flex; align-items:center; justify-content:center; z-index:100; color:var(--muted); font-size:14px; gap:10px;}
+  .cfgwarn{max-width:560px; margin:80px auto; padding:24px; border:1px solid #EFC4BE; background:#FFFAF9; border-radius:16px; font-size:14px; line-height:1.5;}
+
+  .kc-meta a{color:var(--muted); text-decoration:none; border-bottom:1px dotted #C9B8AB;}
+  .kc-meta a:hover{color:var(--orange); border-bottom-color:var(--orange);}
+
+  .datechips{display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;}
+  .datechip{border:1px solid var(--border); background:#fff; border-radius:999px; padding:3px 10px; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer;}
+  .datechip:hover{color:var(--orange); border-color:var(--orange);}
+
+  #toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff;
+    font-size:13px; font-weight:600; padding:10px 18px; border-radius:12px; opacity:0; pointer-events:none;
+    transition:all .25s ease; z-index:200; box-shadow:0 6px 20px rgba(34,22,16,.25); max-width:90vw;}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  /* ---- анимации ---- */
+  @keyframes popIn{from{opacity:0; transform:translateY(14px) scale(.98)} to{opacity:1; transform:none}}
+  @keyframes bloom{0%,100%{transform:scale(1)} 50%{transform:scale(1.12)}}
+  #loading svg{animation:bloom 1.2s ease-in-out infinite;}
+  .modal{animation:popIn .22s ease;}
+  .kcard{transition:transform .15s ease, box-shadow .15s ease;}
+  .kcard:hover{transform:translateY(-2px); box-shadow:0 5px 14px rgba(120,90,60,.16);}
+  .view-fade{animation:popIn .25s ease;}
+
+  /* ---- вкладки ---- */
+  .tabs{display:flex; background:var(--tint2); border-radius:11px; padding:3px; gap:2px;}
+  .tab{border:none; cursor:pointer; font:inherit; font-size:12.5px; font-weight:700; padding:6px 14px; border-radius:9px; background:transparent; color:var(--muted); transition:all .2s;}
+  .tab.active{background:#fff; color:var(--ink); box-shadow:0 1px 3px rgba(120,90,60,.18);}
+
+  /* ---- дашборд ---- */
+  .dash{flex:1; overflow-y:auto; padding:16px; display:none;}
+  .statgrid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px; max-width:1080px; margin:0 auto 12px;}
+  .statcard{background:#fff; border:1px solid var(--border); border-radius:14px; padding:13px 16px;}
+  .statcard .num{font-size:26px; font-weight:800; line-height:1.1;}
+  .statcard .lbl{font-size:11px; color:var(--muted); font-weight:600; margin-top:3px;}
+  .panelrow{display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:1080px; margin:0 auto 12px;}
+  @media(max-width:760px){ .panelrow{grid-template-columns:1fr;} }
+  .panel{background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px 16px;}
+  .panel.wide{max-width:1080px; margin:0 auto;}
+  .panel h3{font-size:13px; margin-bottom:10px;}
+  .frow{display:flex; align-items:center; gap:8px; margin-bottom:7px; font-size:11.5px;}
+  .frow .fl{width:112px; font-weight:600; color:var(--muted); flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .frow .ftrack{flex:1; background:var(--tint2); border-radius:99px; height:14px; overflow:hidden;}
+  .frow .fbar{height:100%; border-radius:99px; width:0; transition:width .7s cubic-bezier(.2,.8,.2,1);}
+  .frow .fn{width:28px; text-align:right; font-weight:700;}
+  .feed{font-size:12px;}
+  .feed-item{display:flex; gap:8px; padding:7px 0; border-bottom:1px solid var(--tint2); line-height:1.45; align-items:baseline;}
+  .feed-item:last-child{border-bottom:none;}
+  .feed-time{color:#B7A99D; font-size:10.5px; white-space:nowrap; margin-left:auto; flex-shrink:0;}
+
+  /* ---- история в карточке ---- */
+  .hist{max-height:200px; overflow-y:auto; background:var(--tint); border:1px solid var(--border); border-radius:12px; padding:6px 12px; font-size:11.5px;}
+  .hist-item{padding:7px 0; border-bottom:1px solid #F0E4DA; line-height:1.45;}
+  .hist-item:last-child{border-bottom:none;}
+  .hist-time{color:#B7A99D; font-size:10px;}
+</style>
+</head>
+<body>
+
+<script>
+  const SUPABASE_URL = "https://gnpjgplcmxhfgnjfohpu.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_rS9CYIpyLI8YfspBgDeogQ_qzLc8anO";
+</script>
+
+<div id="loading">
+  <svg width="28" height="28" viewBox="0 0 100 100"><g fill="#E8541F"><circle cx="50" cy="24" r="22"/><circle cx="74" cy="42" r="22"/><circle cx="65" cy="71" r="22"/><circle cx="35" cy="71" r="22"/><circle cx="26" cy="42" r="22"/><circle cx="50" cy="48" r="26"/></g><path d="M50 33 L66 46 L66 64 L34 64 L34 46 Z" fill="#fff"/></svg>
+  Загрузка…
+</div>
+
+<div id="app" style="display:flex;flex-direction:column;flex:1;min-height:0;"></div>
+
+<script>
+const FLOWER = (s=30) => `<svg width="${s}" height="${s}" viewBox="0 0 100 100"><defs><linearGradient id="g${s}${Math.random().toString(36).slice(2,5)}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF5430"/><stop offset="1" stop-color="#FFA01E"/></linearGradient></defs><g fill="#FF7A28"><circle cx="50" cy="24" r="22"/><circle cx="74" cy="42" r="22"/><circle cx="65" cy="71" r="22"/><circle cx="35" cy="71" r="22"/><circle cx="26" cy="42" r="22"/><circle cx="50" cy="48" r="26"/></g><path d="M50 33 L66 46 L66 64 L34 64 L34 46 Z" fill="#fff"/></svg>`;
+
+const STATUSES = [
+  {id:"new",     label:"Новая",        color:"#9A8A7D"},
+  {id:"called",  label:"Звонок сделан",color:"#C99A2E"},
+  {id:"sent",    label:"Материалы",    color:"#D97B2B"},
+  {id:"meeting", label:"Встреча",      color:"#E8541F"},
+  {id:"pilot",   label:"Пилот",        color:"#C2410C"},
+  {id:"partner", label:"Партнёр",      color:"#1E9D63"},
+  {id:"lost",    label:"Отказ",        color:"#A3433A"},
+];
+const ORDER = ["new","called","sent","meeting","pilot","partner"];
+
+let sb=null, me=null, myProfile=null, companies=[];
+let onlyOverdue=false, authorFilter="all", editId=null;
+let view="board";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const todayStr = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const fmtDate = s => { if(!s) return ""; const [y,m,d]=s.split("-"); return d+"."+m; };
+const isOverdue = c => c.next_date && c.next_date < todayStr() && c.status!=="partner" && c.status!=="lost";
+const isAdmin = () => myProfile && myProfile.role === "admin";
+
+// ---- защита от дубликатов ----
+const normName = s => String(s||"").toLowerCase().replace(/[«»"']/g,"").replace(/\s+/g," ").trim();
+const normPhone = s => {
+  const d = String(s||"").replace(/\D/g,"");
+  return d.length >= 9 ? d.slice(-9) : d;   // сравниваем последние 9 цифр (без кода страны)
+};
+function findDuplicate(name, phone, excludeId){
+  const n = normName(name), p = normPhone(phone);
+  return companies.find(c => {
+    if(c.id === excludeId) return false;
+    if(n && normName(c.name) === n) return true;
+    if(p && normPhone(c.phone) === p) return true;
+    return false;
+  });
+}
+
+// ---- красивые телефоны ----
+function phoneMask(el){
+  let d = el.value.replace(/\D/g,"");
+  if(d.startsWith("998")) d = d.slice(3);
+  d = d.slice(0,9);
+  if(!d){ if(el.value.trim()==="+" || el.value.trim()==="") return; el.value=""; return; }
+  let out = "+998 " + d.slice(0,2);
+  if(d.length>2) out += " " + d.slice(2,5);
+  if(d.length>5) out += " " + d.slice(5,7);
+  if(d.length>7) out += " " + d.slice(7,9);
+  el.value = out;
+}
+function fmtPhone(p){
+  let d = String(p||"").replace(/\D/g,"");
+  if(d.startsWith("998")) d = d.slice(3);
+  if(d.length!==9) return p||"";
+  return `+998 ${d.slice(0,2)} ${d.slice(2,5)} ${d.slice(5,7)} ${d.slice(7,9)}`;
+}
+function telHref(p){
+  let d = String(p||"").replace(/\D/g,"");
+  if(!d) return "";
+  if(!d.startsWith("998") && d.length===9) d = "998"+d;
+  return "tel:+"+d;
+}
+function tgHref(t){
+  const u = String(t||"").trim().replace(/^@/,"").replace(/^https?:\/\/t\.me\//,"");
+  return u ? "https://t.me/"+u : "";
+}
+function normTelegram(t){
+  let u = String(t||"").trim();
+  if(!u) return "";
+  u = u.replace(/^https?:\/\/t\.me\//,"").replace(/^@/,"");
+  return "@"+u;
+}
+
+// ---- даты ----
+function plusDays(n){
+  const d = new Date(); d.setDate(d.getDate()+n);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function setDate(n){ const el=$("f_nextDate"); if(el) el.value = plusDays(n); }
+
+// ---- toast ----
+let toastTimer = null;
+function toast(msg){
+  let el = $("toast");
+  if(!el){ el = document.createElement("div"); el.id="toast"; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove("show"), 2200);
+}
+
+(async function init(){
+  if(SUPABASE_URL.startsWith("ВСТАВЬТЕ")){
+    $("loading").style.display="none";
+    $("app").innerHTML = `<div class="cfgwarn"><b>Осталось подключить базу.</b> Вставьте ключи Supabase в блок настройки в начале файла.</div>`;
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data:{ session } } = await sb.auth.getSession();
+  $("loading").style.display="none";
+  if(session){ me = session.user; await afterLogin(); }
+  else renderLogin();
+})();
+
+function renderLogin(){
+  $("app").innerHTML = `
+  <div class="login"><div class="login-card">
+    <div class="logo">${FLOWER(36)}<h1>sweeply · CRM</h1></div>
+    <div class="field"><label>Email</label><input id="l_email" type="email" autocomplete="username"></div>
+    <div class="field"><label>Пароль</label><input id="l_pass" type="password" autocomplete="current-password"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Войти</button>
+    <div class="err" id="l_err"></div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:14px;text-align:center">Аккаунты создаёт администратор.</div>
+  </div></div>`;
+  $("l_pass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+}
+
+async function doLogin(){
+  $("l_err").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email:$("l_email").value.trim(), password:$("l_pass").value });
+  if(error){ $("l_err").textContent = "Неверный email или пароль."; return; }
+  const { data:{ session } } = await sb.auth.getSession();
+  me = session.user;
+  await afterLogin();
+}
+
+async function doLogout(){ await sb.auth.signOut(); me=null; myProfile=null; companies=[]; renderLogin(); }
+
+async function afterLogin(){
+  const { data: prof } = await sb.from("profiles").select("name, role").eq("id", me.id).single();
+  myProfile = prof || { name: me.email.split("@")[0], role:"manager" };
+  await fetchCompanies();
+  renderApp();
+}
+
+async function fetchCompanies(){
+  const { data, error } = await sb.from("companies").select("*").order("created_at", { ascending:false });
+  if(!error) companies = data || [];
+}
+
+function renderApp(){
+  $("app").innerHTML = `
+  <div class="topbar">
+    <div class="brand">${FLOWER(30)}<div><h1>sweeply · CRM</h1><div class="sub">общая база команды</div></div></div>
+    <div class="tabs">
+      <button class="tab active" id="tab-board" onclick="switchView('board')">Доска</button>
+      <button class="tab" id="tab-dash" onclick="switchView('dash')">Дашборд</button>
+    </div>
+    <div class="right">
+      <span class="userbox"><b>${esc(myProfile.name)}</b><span class="rolebadge ${isAdmin()?"role-admin":"role-manager"}">${isAdmin()?"админ":"менеджер"}</span></span>
+      <button class="btn btn-ghost btn-sm" onclick="refresh()" title="Обновить">⟳</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()" title="Экспорт в Excel">📊</button>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Выйти</button>
+      <button class="btn btn-primary" onclick="openAdd()">+ Компания</button>
+    </div>
+  </div>
+  <div class="filters" id="filtersBar">
+    <input class="search" id="search" placeholder="Поиск…" oninput="renderBoard()">
+    <select class="authorsel" id="authorsel" onchange="authorFilter=this.value;renderBoard()"></select>
+    <button class="chip ${onlyOverdue?"active":""}" id="overChip" onclick="onlyOverdue=!onlyOverdue;renderApp()">🔥 Просрочено <span id="overCount"></span></button>
+    <span class="stat" id="stat"></span>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="dash" id="dash"></div>
+
+  <div class="modal-bg" id="modalBg" style="display:none" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h2 id="modalTitle">Новая компания</h2>
+      <div class="field"><label>Компания *</label><input id="f_name" placeholder="Например: ChistoDom" oninput="dupHint()"></div>
+      <div id="dupWarn" style="display:none;margin:-6px 0 12px;padding:8px 12px;border-radius:10px;background:#F8E7E5;color:#A3433A;font-size:11.5px;line-height:1.4"></div>
+      <div class="row2">
+        <div class="field"><label>ЛПР (имя, роль)</label><input id="f_person" placeholder="Азиз, директор"></div>
+        <div class="field"><label>Уборщиц в штате</label><input id="f_cleaners" placeholder="≈ 15"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Телефон</label><input id="f_phone" placeholder="+998 90 000 00 00" inputmode="tel" oninput="phoneMask(this);dupHint()"></div>
+        <div class="field"><label>Telegram</label><input id="f_telegram" placeholder="@username"></div>
+      </div>
+      <div class="field"><label>Этап</label><select id="f_status">${STATUSES.map(s=>`<option value="${s.id}">${s.label}</option>`).join("")}</select></div>
+      <div class="row2">
+        <div class="field"><label>Следующий шаг</label><input id="f_nextAction" placeholder="Перезвонить после деки"></div>
+        <div class="field"><label>Дата шага</label><input id="f_nextDate" type="date">
+          <div class="datechips">
+            <span class="datechip" onclick="setDate(0)">сегодня</span>
+            <span class="datechip" onclick="setDate(1)">завтра</span>
+            <span class="datechip" onclick="setDate(2)">+2 дня</span>
+            <span class="datechip" onclick="setDate(7)">неделя</span>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>Заметки</label><textarea id="f_notes" placeholder="Возражения, договорённости…"></textarea></div>
+      <div class="field" id="histWrap" style="display:none"><label>История изменений</label><div class="hist" id="histList"></div></div>
+      <div class="foot">
+        <button class="btn btn-primary" id="saveBtn" onclick="saveForm()">Сохранить</button>
+        <button class="btn btn-ghost" onclick="closeModal()">Отмена</button>
+        <button class="btn danger" id="delBtn" style="display:none" onclick="deleteFromModal()">Удалить</button>
+      </div>
+    </div>
+  </div>`;
+  renderBoard();
+  applyView();
+}
+
+function switchView(v){ view = v; applyView(); }
+function applyView(){
+  const isDash = view==="dash";
+  $("tab-board").classList.toggle("active", !isDash);
+  $("tab-dash").classList.toggle("active", isDash);
+  $("filtersBar").style.display = isDash ? "none" : "flex";
+  $("board").style.display = isDash ? "none" : "flex";
+  $("dash").style.display = isDash ? "block" : "none";
+  if(isDash) renderDash();
+}
+
+// ================= ДАШБОРД =================
+const fmtTs = ts => {
+  const d = new Date(ts);
+  return String(d.getDate()).padStart(2,"0")+"."+String(d.getMonth()+1).padStart(2,"0")+" "+
+         String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+};
+const ACT_ICO = { created:"➕", moved:"➜", updated:"✏️", deleted:"🗑" };
+function histLine(h){
+  if(h.action==="created") return `создал(а) карточку${h.details?` · ${esc(h.details)}`:""}`;
+  if(h.action==="moved")   return `этап: <b>${esc(h.details)}</b>`;
+  if(h.action==="updated") return esc(h.details);
+  if(h.action==="deleted") return `удалил(а) карточку`;
+  return esc(h.details);
+}
+
+async function renderDash(){
+  const today = todayStr();
+  const active = companies.filter(c=>c.status!=="partner" && c.status!=="lost");
+  const stats = [
+    [companies.length, "компаний в базе", INKC()],
+    [companies.filter(c=>c.next_date===today && c.status!=="partner" && c.status!=="lost").length, "📌 шагов на сегодня", "#E8541F"],
+    [companies.filter(isOverdue).length, "🔥 просрочено", "#A3433A"],
+    [companies.filter(c=>c.status==="pilot").length, "на пилоте", "#C2410C"],
+    [companies.filter(c=>c.status==="partner").length, "партнёров", "#1E9D63"],
+  ];
+  function INKC(){ return "#221610"; }
+
+  // funnel rows
+  const maxCnt = Math.max(1, ...STATUSES.map(s=>companies.filter(c=>c.status===s.id).length));
+  const funnel = STATUSES.map(s=>{
+    const n = companies.filter(c=>c.status===s.id).length;
+    return `<div class="frow"><span class="fl">${s.label}</span>
+      <span class="ftrack"><span class="fbar" data-w="${Math.round(n/maxCnt*100)}" style="background:${s.color}"></span></span>
+      <span class="fn">${n}</span></div>`;
+  }).join("");
+
+  // managers
+  const byAuthor = {};
+  companies.forEach(c=>{
+    const a = c.author_name || "—";
+    byAuthor[a] = byAuthor[a] || { total:0, partner:0, over:0 };
+    byAuthor[a].total++;
+    if(c.status==="partner") byAuthor[a].partner++;
+    if(isOverdue(c)) byAuthor[a].over++;
+  });
+  const maxA = Math.max(1, ...Object.values(byAuthor).map(v=>v.total));
+  const managers = Object.entries(byAuthor).sort((a,b)=>b[1].total-a[1].total).map(([name,v])=>
+    `<div class="frow"><span class="fl" title="${esc(name)}">${esc(name)}</span>
+      <span class="ftrack"><span class="fbar" data-w="${Math.round(v.total/maxA*100)}" style="background:linear-gradient(90deg,#FF5430,#FFA01E)"></span></span>
+      <span class="fn">${v.total}</span>
+      <span style="font-size:10.5px;color:var(--muted);width:118px;flex-shrink:0">🤝 ${v.partner}${v.over?` · 🔥 ${v.over}`:""}</span></div>`
+  ).join("") || `<div style="font-size:12px;color:var(--muted)">пока пусто</div>`;
+
+  $("dash").innerHTML = `
+    <div class="view-fade">
+      <div class="statgrid">${stats.map(s=>`<div class="statcard"><div class="num" style="color:${s[2]}">${s[0]}</div><div class="lbl">${s[1]}</div></div>`).join("")}</div>
+      <div class="panelrow">
+        <div class="panel"><h3>Воронка</h3>${funnel}</div>
+        <div class="panel"><h3>По менеджерам</h3>${managers}</div>
+      </div>
+      <div class="panel wide"><h3>Последние действия</h3><div class="feed" id="feed"><span style="color:var(--muted);font-size:12px">загружаю…</span></div></div>
+    </div>`;
+
+  // animate bars
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    document.querySelectorAll(".fbar").forEach(b=>{ b.style.width = b.dataset.w + "%"; });
+  }));
+
+  // activity feed
+  try{
+    const { data, error } = await sb.from("company_history").select("*").order("created_at",{ascending:false}).limit(15);
+    if(error) throw error;
+    $("feed").innerHTML = (data&&data.length) ? data.map(h=>
+      `<div class="feed-item"><span>${ACT_ICO[h.action]||"·"}</span>
+        <span><b>${esc(h.user_name)}</b> · «${esc(h.company_name)}» — ${histLine(h)}</span>
+        <span class="feed-time">${fmtTs(h.created_at)}</span></div>`).join("")
+      : `<span style="color:var(--muted);font-size:12px">действий пока нет</span>`;
+  }catch(e){
+    $("feed").innerHTML = `<span style="color:#A3433A;font-size:12px">История не подключена — выполните SQL-скрипт истории в Supabase (см. инструкцию).</span>`;
+  }
+}
+
+// ================= ИСТОРИЯ КАРТОЧКИ =================
+async function loadHistory(companyId){
+  const wrap = $("histWrap"), list = $("histList");
+  wrap.style.display = "block";
+  list.innerHTML = `<span style="color:var(--muted)">загружаю…</span>`;
+  try{
+    const { data, error } = await sb.from("company_history").select("*").eq("company_id", companyId).order("created_at",{ascending:false}).limit(50);
+    if(error) throw error;
+    list.innerHTML = (data&&data.length) ? data.map(h=>
+      `<div class="hist-item">${ACT_ICO[h.action]||"·"} <b>${esc(h.user_name)}</b> ${histLine(h)}<br><span class="hist-time">${fmtTs(h.created_at)}</span></div>`).join("")
+      : `<span style="color:var(--muted)">записей пока нет — история начнёт писаться с этого момента</span>`;
+  }catch(e){
+    list.innerHTML = `<span style="color:#A3433A">История не подключена — выполните SQL-скрипт истории в Supabase.</span>`;
+  }
+}
+
+async function refresh(){ await fetchCompanies(); renderApp(); }
+
+function visibleCompanies(){
+  const q = ($("search")?.value||"").trim().toLowerCase();
+  let list = [...companies];
+  if(authorFilter!=="all") list = list.filter(c=>c.author_name===authorFilter);
+  if(onlyOverdue) list = list.filter(isOverdue);
+  if(q) list = list.filter(c =>
+    (c.name||"").toLowerCase().includes(q) || (c.person||"").toLowerCase().includes(q) ||
+    (c.phone||"").includes(q) || (c.notes||"").toLowerCase().includes(q));
+  return list;
+}
+
+function renderBoard(){
+  const today = todayStr();
+  const list = visibleCompanies();
+
+  // author options
+  const authors = [...new Set(companies.map(c=>c.author_name).filter(Boolean))].sort();
+  $("authorsel").innerHTML = `<option value="all">Автор: все</option>` +
+    authors.map(a=>`<option value="${esc(a)}" ${authorFilter===a?"selected":""}>Автор: ${esc(a)}</option>`).join("");
+  $("overCount").textContent = "· " + companies.filter(isOverdue).length;
+  const todayCount = companies.filter(c=>c.next_date===today && c.status!=="partner" && c.status!=="lost").length;
+  $("stat").textContent = companies.length + " компаний" + (todayCount?` · 📌 ${todayCount} на сегодня`:"");
+
+  $("board").innerHTML = STATUSES.map(st=>{
+    const cards = list.filter(c=>c.status===st.id)
+      .sort((a,b)=>{
+        const ao=isOverdue(a)?0:1, bo=isOverdue(b)?0:1;
+        if(ao!==bo) return ao-bo;
+        if(a.next_date&&b.next_date) return a.next_date.localeCompare(b.next_date);
+        if(a.next_date) return -1; if(b.next_date) return 1;
+        return (a.name||"").localeCompare(b.name||"");
+      });
+    return `<div class="col" data-st="${st.id}"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="onDrop(event,'${st.id}')">
+      <div class="col-head">
+        <span class="col-dot" style="background:${st.color}"></span>
+        <span class="col-title" style="color:${st.color}">${st.label}</span>
+        <span class="col-count">${cards.length}</span>
+      </div>
+      <div class="col-body">
+        ${cards.map(c=>kcard(c,today)).join("") || `<div style="font-size:11px;color:#B7A99D;text-align:center;padding:14px 6px">пусто</div>`}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function kcard(c, today){
+  const over = isOverdue(c);
+  const isToday = c.next_date===today;
+  const i = ORDER.indexOf(c.status);
+  const canAdv = i>-1 && i<ORDER.length-1;
+  return `<div class="kcard ${over?"overdue":""}" draggable="true" id="card-${c.id}"
+      ondragstart="onDragStart(event,'${c.id}')" ondragend="this.classList.remove('dragging')">
+    <div class="kc-top">
+      <div class="kc-name">${esc(c.name)}</div>
+      <div class="kc-author">${esc(c.author_name||"—")}</div>
+    </div>
+    ${(c.person||c.phone||c.telegram)?`<div class="kc-meta">${esc(c.person)}${c.person&&(c.phone||c.telegram)?" · ":""}${c.phone?`<a href="${telHref(c.phone)}" onclick="event.stopPropagation()">${esc(fmtPhone(c.phone))}</a>`:""}${c.phone&&c.telegram?" · ":""}${c.telegram?`<a href="${tgHref(c.telegram)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(normTelegram(c.telegram))}</a>`:""}</div>`:""}
+    ${(c.next_action||c.next_date)?`<div class="kc-next ${over?"over":isToday?"today":""}">
+      ${over?"🔥 ":isToday?"📌 ":"→ "}${esc(c.next_action||"шаг")}${c.next_date?` <span class="d">${isToday?"сегодня":c.next_date===plusDays(1)?"завтра":fmtDate(c.next_date)}</span>`:""}
+    </div>`:""}
+    ${c.notes?`<div class="kc-notes">${esc(c.notes)}</div>`:""}
+    <div class="kc-foot">
+      ${c.cleaners?`<span class="kc-cleaners">👥 ${esc(c.cleaners)}</span>`:""}
+      <div class="kc-btns">
+        ${canAdv?`<button class="kc-btn adv" onclick="advance('${c.id}')" title="Следующий этап">→</button>`:""}
+        <button class="kc-btn" onclick="openEdit('${c.id}')" title="Редактировать">✎</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ---- drag & drop ----
+function onDragStart(ev, id){
+  ev.dataTransfer.setData("text/plain", id);
+  ev.dataTransfer.effectAllowed = "move";
+  setTimeout(()=>{ const el=$("card-"+id); if(el) el.classList.add("dragging"); },0);
+}
+async function onDrop(ev, status){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove("dragover");
+  const id = ev.dataTransfer.getData("text/plain");
+  const c = companies.find(x=>x.id===id);
+  if(!c || c.status===status) { renderBoard(); return; }
+  const prev = c.status;
+  c.status = status; renderBoard();           // мгновенно в UI
+  const { error } = await sb.from("companies").update({ status }).eq("id", id);
+  if(error){ c.status = prev; renderBoard(); alert("Не удалось переместить: "+error.message); }
+  else { const st = STATUSES.find(s=>s.id===status); toast(`${c.name} → «${st?st.label:status}»`); }
+}
+
+// ---- mutations ----
+async function advance(id){
+  const c = companies.find(x=>x.id===id); if(!c) return;
+  const i = ORDER.indexOf(c.status);
+  if(i>-1 && i<ORDER.length-1){
+    const next = ORDER[i+1], prev = c.status;
+    c.status = next; renderBoard();
+    const { error } = await sb.from("companies").update({ status: next }).eq("id", id);
+    if(error){ c.status = prev; renderBoard(); }
+  }
+}
+
+// ---- form ----
+function openAdd(){
+  editId = null;
+  $("modalTitle").textContent = "Новая компания";
+  $("delBtn").style.display = "none";
+  ["name","person","cleaners","phone","telegram","nextAction","notes"].forEach(f=>$("f_"+f).value="");
+  $("f_status").value = "new";
+  $("f_nextDate").value = todayStr();
+  $("dupWarn").style.display = "none";
+  $("histWrap").style.display = "none";
+  $("modalBg").style.display = "flex";
+  $("f_name").focus();
+}
+function openEdit(id){
+  const c = companies.find(x=>x.id===id); if(!c) return;
+  editId = id;
+  $("modalTitle").textContent = "Редактировать";
+  $("delBtn").style.display = (isAdmin() || c.created_by===me.id) ? "inline-block" : "none";
+  $("f_name").value=c.name||""; $("f_person").value=c.person||""; $("f_cleaners").value=c.cleaners||"";
+  $("f_phone").value=fmtPhone(c.phone)||c.phone||""; $("f_telegram").value=c.telegram||"";
+  $("f_status").value=c.status||"new"; $("f_nextAction").value=c.next_action||"";
+  $("f_nextDate").value=c.next_date||""; $("f_notes").value=c.notes||"";
+  $("dupWarn").style.display = "none";
+  $("modalBg").style.display = "flex";
+  loadHistory(id);
+}
+function closeModal(){ $("modalBg").style.display="none"; }
+
+function dupHint(){
+  const warn = $("dupWarn"); if(!warn) return;
+  const dup = findDuplicate($("f_name").value, $("f_phone").value, editId);
+  if(dup){
+    const st = STATUSES.find(s=>s.id===dup.status);
+    warn.style.display = "block";
+    warn.innerHTML = `⚠️ Похоже, эта компания уже в базе: <b>${esc(dup.name)}</b>${dup.phone?` · ${esc(dup.phone)}`:""} — этап «${st?st.label:""}», ведёт ${esc(dup.author_name||"—")}`;
+  } else {
+    warn.style.display = "none";
+  }
+}
+
+async function saveForm(){
+  const v = f => $("f_"+f).value.trim();
+  if(!v("name")){ $("f_name").focus(); return; }
+
+  // проверка на дубликат: название или телефон
+  const dup = findDuplicate(v("name"), v("phone"), editId);
+  if(dup){
+    const st = STATUSES.find(s=>s.id===dup.status);
+    const reason = (normName(dup.name)===normName(v("name"))) ? "с таким названием" : "с таким телефоном";
+    alert(`Компания ${reason} уже есть в базе:\n\n«${dup.name}»${dup.phone?` · ${dup.phone}`:""}\nЭтап: ${st?st.label:dup.status} · ведёт: ${dup.author_name||"—"}\n\nНайдите её на доске через поиск, чтобы не дублировать работу.`);
+    return;
+  }
+
+  $("saveBtn").disabled = true;
+  const data = {
+    name:v("name"), person:v("person"), cleaners:v("cleaners"),
+    phone:v("phone"), telegram:normTelegram(v("telegram")),
+    status:$("f_status").value, next_action:v("nextAction"),
+    next_date: $("f_nextDate").value || null, notes:v("notes"),
+  };
+  let error;
+  if(editId){
+    ({ error } = await sb.from("companies").update(data).eq("id", editId));
+    if(!error){ const c=companies.find(x=>x.id===editId); Object.assign(c, data); }
+  } else {
+    const res = await sb.from("companies").insert({ ...data, created_by: me.id, author_name: myProfile.name }).select().single();
+    error = res.error;
+    if(!error) companies.unshift(res.data);
+  }
+  $("saveBtn").disabled = false;
+  if(error){
+    if(error.code === "23505"){
+      alert("Такая компания уже есть в базе (её только что добавил кто-то из команды). Нажмите ⟳, чтобы обновить доску, и найдите её через поиск.");
+    } else {
+      alert("Не удалось сохранить: " + error.message);
+    }
+    return;
+  }
+  const savedEdit = !!editId;
+  closeModal(); renderBoard();
+  toast(savedEdit ? "Сохранено ✓" : "Компания добавлена ✓");
+}
+
+async function deleteFromModal(){
+  if(!editId) return;
+  if(!confirm("Удалить эту компанию из базы? Это действие необратимо.")) return;
+  const { error } = await sb.from("companies").delete().eq("id", editId);
+  if(error){ alert("Не удалось удалить: "+error.message); return; }
+  companies = companies.filter(c=>c.id!==editId);
+  closeModal(); renderBoard();
+  toast("Удалено");
+}
+
+// ---- export ----
+function exportCSV(){
+  const stOf = id => STATUSES.find(s=>s.id===id)?.label || id;
+  const head = ["Компания","ЛПР","Телефон","Telegram","Уборщиц","Этап","Следующий шаг","Дата","Заметки","Автор","Добавлена"];
+  const rows = companies.map(c=>[c.name,c.person,c.phone,c.telegram,c.cleaners,stOf(c.status),c.next_action,c.next_date||"",(c.notes||"").replace(/\n/g," "),c.author_name,(c.created_at||"").slice(0,10)]);
+  const csv = "\uFEFF" + [head,...rows].map(r=>r.map(x=>`"${String(x||"").replace(/"/g,'""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download = "sweeply-crm-"+todayStr()+".csv"; a.click(); URL.revokeObjectURL(a.href);
+}
+
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape") closeModal();
+  if((e.metaKey||e.ctrlKey) && e.key==="Enter" && $("modalBg") && $("modalBg").style.display!=="none") saveForm();
+});
+</script>
+</body>
+</html>
